@@ -63,10 +63,10 @@ static void MX_USART3_UART_Init(void);
 /* Private function prototypes -----------------------------------------------*/
 char rx3_buf[50],rx6_buf[100],rx3_data,rx6_data;
 int rx3_index=0,rx6_index=0;
+int ncnt=0;
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if(huart->Instance==USART3){
 		if(rx3_index==0){
@@ -91,15 +91,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	  				rx6_buf[i]=0;
 	  			}
 	  	  }
-	  	  rx6_buf[rx6_index++]=rx6_data;
-	  	  if(rx6_data=='\0'){
-	  	  //if(rx6_index>4){
-			  if((rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='K')||(rx6_buf[rx6_index-5]=='R'&&rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='R')||(rx6_buf[rx6_index-5]=='E'&&rx6_buf[rx6_index-4]=='C'&&rx6_buf[rx6_index-3]=='T')||rx6_buf[rx6_index-1]=='%'){
-				  rx6_index=0;
-				  char tosend[200]={0};
-				  sprintf(tosend,"\r\nESP8266:\r\n%s",rx6_buf);
-				  HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
-			  }
+	  	  if(rx6_data=='$' || rx6_index>0){
+	  		  rx6_buf[rx6_index++]=rx6_data;
+	  	  }
+	  	  if(rx6_data=='%'){
+			  ncnt=0;
+			  rx6_index=0;
+			  char tosend[200]={0};
+			  sprintf(tosend,"\r\nESP8266:  %s\r\n",rx6_buf);
+			  HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
 	  	  }
 	  	HAL_UART_Receive_IT(&huart6,&rx6_data,1);
 
@@ -147,7 +147,6 @@ int main(void)
   HAL_Delay(500);
   sprintf(tosend,"AT\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  /*
   HAL_Delay(500);
   sprintf(tosend,"AT+CWMODE=2\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
@@ -155,9 +154,11 @@ int main(void)
   sprintf(tosend,"AT+CIPMUX=1\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
   HAL_Delay(500);
-  sprintf(tosend,"AT+CIPSERVER=1\r\n");
+  sprintf(tosend,"AT+CIPSERVER=1,66\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  */
+  sprintf(tosend,"AT+CIPSTO=0\r\n");
+   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -208,7 +209,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
@@ -251,7 +252,7 @@ static void MX_USART6_UART_Init(void)
 {
 
   huart6.Instance = USART6;
-  huart6.Init.BaudRate = 9600;
+  huart6.Init.BaudRate = 115200;
   huart6.Init.WordLength = UART_WORDLENGTH_8B;
   huart6.Init.StopBits = UART_STOPBITS_1;
   huart6.Init.Parity = UART_PARITY_NONE;
