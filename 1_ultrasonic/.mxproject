@@ -1,7 +1,7 @@
 [PreviousGenFiles]
-HeaderPath=//Mac/Home/Desktop/arm/1_ultrasonic/Inc
+HeaderPath=//Mac/Home/Desktop/arm/project/1_ultrasonic/Inc
 HeaderFiles=stm32f4xx_it.h;stm32f4xx_hal_conf.h;main.h;
-SourcePath=//Mac/Home/Desktop/arm/1_ultrasonic/Src
+SourcePath=//Mac/Home/Desktop/arm/project/1_ultrasonic/Src
 SourceFiles=stm32f4xx_it.c;stm32f4xx_hal_msp.c;main.c;
 
 [PreviousLibFiles]

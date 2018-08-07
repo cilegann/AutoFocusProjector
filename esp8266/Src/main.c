@@ -39,7 +39,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_hal.h"
-
+#include <string.h>
+#include <stdio.h>
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -61,27 +62,28 @@ static void MX_USART3_UART_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-char rx3_buf[50],rx6_buf[100],rx3_data,rx6_data;
+char rx3_buf[100],rx6_buf[100],rx3_data,rx6_data;
 int rx3_index=0,rx6_index=0;
-int ncnt=0;
+char state=0;
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if(huart->Instance==USART3){
 		if(rx3_index==0){
-			for(int i=0;i<50;i++){
+			for(int i=0;i<100;i++){
 				rx3_buf[i]=0;
 			}
 		}
 		rx3_buf[rx3_index++]=rx3_data;
 		if(rx3_data=='\n'){
 			rx3_index=0;
-			char tosend[100]={0};
-			sprintf(tosend,"Send [%s] to U6\r\n",rx3_buf);
+			char tosend[200]={0};
+			char tos[200]={0};
+			sprintf(tosend,"[STM] Send to ESP : %s",rx3_buf);
 			HAL_UART_Transmit(&huart3,tosend,sizeof(tosend),0xffff);
 			HAL_UART_Transmit(&huart6,rx3_buf,sizeof(rx3_buf),0xffff);
-			HAL_UART_Transmit(&huart3,"done\r\n",6,0xffff);
+			HAL_UART_Transmit(&huart3,"[STM] Done\r\n",12,0xffff);
 		}
 		HAL_UART_Receive_IT(&huart3,&rx3_data,1);
 	}
@@ -95,12 +97,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	  		  rx6_buf[rx6_index++]=rx6_data;
 	  	  }
 	  	  if(rx6_data=='%'){
-			  ncnt=0;
 			  rx6_index=0;
-			  char tosend[200]={0};
-			  sprintf(tosend,"\r\nESP8266:  %s\r\n",rx6_buf);
+			  char tosend[150]={0};
+			  sprintf(tosend,"[ESP] %s\r\n",rx6_buf);
 			  HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
+			  state=rx6_buf[rx6_index-2];
 	  	  }
+
 	  	HAL_UART_Receive_IT(&huart6,&rx6_data,1);
 
 	}
@@ -141,9 +144,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart3,&rx3_data,1);
   HAL_UART_Receive_IT(&huart6,&rx6_data,1);
-  HAL_UART_Transmit(&huart3,"ok\r\n",4,0xffff);
-
   char tosend[100]={0};
+  sprintf(tosend,"[STM] Board initialize OK\r\n");
+  HAL_UART_Transmit(&huart3,tosend,sizeof(tosend),0xffff);
+
+
   HAL_Delay(500);
   sprintf(tosend,"AT\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
@@ -156,9 +161,11 @@ int main(void)
   HAL_Delay(500);
   sprintf(tosend,"AT+CIPSERVER=1,66\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
+  HAL_Delay(500);
   sprintf(tosend,"AT+CIPSTO=0\r\n");
-   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-
+  HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
+  sprintf(tosend,"[STM] Wifi initialize OK\r\n");
+  HAL_UART_Transmit(&huart3,tosend,sizeof(tosend),0xffff);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -167,7 +174,6 @@ int main(void)
   {
 
   /* USER CODE END WHILE */
-
   /* USER CODE BEGIN 3 */
 
   }
