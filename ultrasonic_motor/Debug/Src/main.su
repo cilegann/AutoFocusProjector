@@ -1,6 +1,7 @@
 main.c:85:6:HAL_TIM_IC_CaptureCallback	72	static
 main.c:115:6:HAL_TIM_PeriodElapsedCallback	16	static
 main.c:143:6:HAL_TIM_PWM_PulseFinishedCallback	8	static
-main.c:232:6:SystemClock_Config	88	static
-main.c:160:5:main	112	static
-main.c:492:6:_Error_Handler	0	static
+main.c:152:5:LRCalibrate	24	static
+main.c:241:6:SystemClock_Config	88	static
+main.c:183:5:main	80	static
+main.c:501:6:_Error_Handler	0	static
