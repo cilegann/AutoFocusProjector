@@ -157,7 +157,10 @@
 <board>
 <plain>
 <text x="48.26" y="8.636" size="0.6096" layer="25" font="vector" ratio="20" align="top-center">&gt;VALUE</text>
-<wire x1="21.7" y1="72.39" x2="50.8" y2="72.39" width="0.254" layer="51"/>
+<wire x1="21.7" y1="72.39" x2="27.94" y2="72.39" width="0.254" layer="51"/>
+<wire x1="27.94" y1="72.39" x2="29.21" y2="72.39" width="0.254" layer="51"/>
+<wire x1="29.21" y1="72.39" x2="30.48" y2="72.39" width="0.254" layer="51"/>
+<wire x1="30.48" y1="72.39" x2="50.8" y2="72.39" width="0.254" layer="51"/>
 <wire x1="45.83" y1="72.39" x2="74.93" y2="72.39" width="0.254" layer="51"/>
 <text x="68.58" y="43.18" size="0.8128" layer="51">GND</text>
 <text x="68.58" y="45.72" size="0.8128" layer="51">VIN</text>
@@ -195,6 +198,9 @@ SITE</text>
 <wire x1="21.59" y1="72.39" x2="21.59" y2="13.97" width="0.1524" layer="51"/>
 <wire x1="21.59" y1="13.97" x2="74.93" y2="13.97" width="0.1524" layer="51"/>
 <wire x1="74.93" y1="13.97" x2="74.93" y2="72.39" width="0.1524" layer="51"/>
+<wire x1="27.94" y1="72.39" x2="29.21" y2="72.39" width="0.1524" layer="51"/>
+<wire x1="29.21" y1="72.39" x2="30.48" y2="72.39" width="0.1524" layer="51"/>
+<wire x1="30.48" y1="72.39" x2="29.21" y2="72.39" width="0.1524" layer="51"/>
 </plain>
 <libraries>
 </libraries>
