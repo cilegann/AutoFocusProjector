@@ -51,6 +51,7 @@ TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim5;
 
+UART_HandleTypeDef huart3;
 UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN PV */
@@ -59,6 +60,7 @@ UART_HandleTypeDef huart6;
 #define LRCALI_MAXVALUE 12
 #define LRCALI_PWMWIDTH 50
 #define LRCALI_ULPERIOD 7000 // xK = x us
+#define AFCALI_PWMWIDTH 1000
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,6 +72,7 @@ static void MX_TIM5_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_USART3_UART_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
                                 
@@ -77,14 +80,112 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-int inta,intb,floata,floatb;
-double distancea=0,distanceb=0;
-int ultrasonic=0;  // 0 for Ultrasonic1 , 1 for ultrasonic2 , 2 for motor
-char rx6_buf[100],rx6_data;
-int rx6_index=-1;
+void sendMsg(char*);
+void tellWifi(char*);
+void wifiInit();
+void LRCalibrate();
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+
+// Sending msg to UART3
+void sendMsg(char* str){
+  HAL_UART_Transmit(&huart3,str,sizeof(str),0xffff);
+}
+
+// Sending msg to UART6
+void tellWifi(char* str){
+  HAL_UART_Transmit(&huart6,str,sizeof(str),0xffff);
+}
+
+// Handling UART Receive
+char rx6_buf[100],rx6_data,rx3_buf[100],rx3_data;
+int rx6_index=0,rx3_index=0;
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+	if(huart->Instance==USART3){
+		if(rx3_index==0){
+			for(int i=0;i<100;i++){
+				rx3_buf[i]=0;
+			}
+		}
+		rx3_buf[rx3_index++]=rx3_data;
+		if(rx3_data=='\n'){
+			rx3_index=0;
+			char tosend[200]={0};
+			sprintf(tosend,"[STM] Send to ESP : %s",rx3_buf);
+			sendMsg(tosend);
+      tellWifi(rx3_buf);
+      sendMsg("[STM] Done\r\n");
+		}
+		HAL_UART_Receive_IT(&huart3,&rx3_data,1);
+	}
+  if(huart->Instance==USART6){
+	  	  if(rx6_index==0){
+	  			for(int i=0;i<100;i++){
+	  				rx6_buf[i]=0;
+	  			}
+	  	  }
+	  	  if(rx6_data=='$' || rx6_index>0){
+	  		  rx6_buf[rx6_index++]=rx6_data;
+	  	  }
+	  	  if(rx6_data=='%'){
+			    rx6_index=0;
+			    char tosend[150]={0};
+			    sprintf(tosend,"[ESP] %s\r\n",rx6_buf);
+          sendMsg(tosend);
+			    state=rx6_buf[rx6_index-2];
+	  	  }
+	  	HAL_UART_Receive_IT(&huart6,&rx6_data,1);
+	}
+}
+
+// Handling wifi initialize
+void wifiInit(){
+  tellWifi("AT+CWMODE=2\r\n");
+  HAL_Delay(500);
+  tellWifi("AT+CIPMUX=1\r\n");
+  HAL_Delay(500);
+  tellWifi("AT+CIPSERVER=1\r\n");
+}
+
+// Handling LR calibration
+int inta=0,intb=0,floata=0,floatb=0;
+double distancea=0,distanceb=0;
+int ultrasonic=0;  // 0 for Ultrasonic1 , 1 for ultrasonic2 , 2 for motor
+int LRCALI_STATE=0;
+void LRCalibrate(){
+	if(ultrasonic==2){
+      char tosend[50]={0};
+		  double dl=distancea,dr=distanceb;
+		  if(dl*LRCALI_MAXVALUE>dr && dr*LRCALI_MAXVALUE>dl){
+			  if( (dr-dl)>LRCALI_MINVALUE ||(dl-dr)>LRCALI_MINVALUE ){
+				  if(dl>dr){
+            sprintf(tosend,"> %d.%02d , %d.%02d -> Turn L\r\n",inta,floata,intb,floatb);
+            sendMsg(tosend);
+					  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,1);
+					  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
+				  }else if(dl<dr){
+            sprintf(tosend,"> %d.%02d , %d.%02d -> Turn R\r\n",inta,floata,intb,floatb);
+            sendMsg(tosend);
+					  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,0);
+					  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
+				  }
+			  }else{
+          sprintf(tosend,"> %d.%02d , %d.%02d -> DONE\r\n",inta,floata,intb,floatb);
+          sendMsg(tosend);
+				  LRCALI_STATE=1;
+          return void;
+			  }
+		  }else{
+        sprintf(tosend,"> %d.%02d , %d.%02d -> X\r\n",inta,floata,intb,floatb);
+        sendMsg(tosend);
+      }
+		  ultrasonic=0;
+		  HAL_TIM_Base_Start_IT(&htim1);
+	  }
+}
+
+// Handling Ultrasonic Echo InputCapture
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 	if(htim->Instance==TIM2){
 		if(HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_5)==1){
@@ -106,14 +207,13 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			distanceb=cnt/(double)58;
 			intb=(int)distanceb;
 			floatb=(int)((distanceb-intb)*100);
-			//char tosend[40]={0};
-			//sprintf(tosend,"%d.%02d , %d.%02d\r\n",inta,floata,intb,floatb);
-			//HAL_UART_Transmit(&huart3,tosend,sizeof(tosend),0xffff);
 			ultrasonic=2;
+      LRCalibrate();
 		}
 	}
 }
 
+// A 10 us timer for ultrasonic interval
 int tim1Count=LRCALI_ULPERIOD;
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance==TIM1){
@@ -142,46 +242,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	}
 }
 
+// Handling PWM Pulse
 int pwm5Count=0,pwm4Count=0;
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance==TIM4){
-		if(pwm4Count++>LRCALI_PWMWIDTH){
+  //DC MOTOR PWM
+  if(htim->Instance==TIM4){
+		if(pwm4Count++>=LRCALI_PWMWIDTH){
 			HAL_TIM_PWM_Stop_IT(&htim4,TIM_CHANNEL_3);
 			pwm4Count=0;
 		}
 	}
-  	if(htim->Instance==TIM5){
-		if(pwm5Count++>=1000){
+  //A4988 PWM
+  if(htim->Instance==TIM5){
+		if(pwm5Count++>=AFCALI_PWMWIDTH){
 			HAL_TIM_PWM_Stop_IT(&htim5,TIM_CHANNEL_2);
-			HAL_UART_Transmit(&huart3,"stop\r\n",6,0xffff);
 			pwm5Count=0;
 		}
 	}
 }
 
-int LRCalibrate(){
-	if(ultrasonic==2){
-		  double dl=distancea,dr=distanceb;
-		  if(dl*LRCALI_MAXVALUE>dr && dr*LRCALI_MAXVALUE>dl){
-			  if( (dr-dl)>LRCALI_MINVALUE ||(dl-dr)>LRCALI_MINVALUE ){
-				  if(dl>dr){
-					  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,1);
-					  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
-				  }else if(dl<dr){
-					  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,0);
-					  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
-				  }
-
-			  }else{
-				  return 1;
-			  }
-		  }
-		  ultrasonic=0;
-		  HAL_TIM_Base_Start_IT(&htim1);
-	  }
-	  HAL_Delay(50);
-	  return 0;
-}
 /* USER CODE END 0 */
 
 /**
@@ -219,30 +298,27 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_TIM1_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_IC_Start_IT(&htim2,TIM_CHANNEL_1);
-  //HAL_UART_Transmit(&huart3,"Aok\r\n",5,0xffff);
-  HAL_TIM_IC_Start_IT(&htim3,TIM_CHANNEL_2);
-  //HAL_UART_Transmit(&huart3,"Bok\r\n",5,0xffff);
-  HAL_TIM_Base_Start_IT(&htim1);
-  TIM4->CCR3=50;
-  while(LRCalibrate()!=1);
-
+  
+  // Receiving UART msg
   HAL_UART_Receive_IT(&huart6,&rx6_data,1);
-  char tosend[100]={0};
-  HAL_Delay(500);
-  sprintf(tosend,"AT\r\n");
-  HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  HAL_Delay(500);
-  sprintf(tosend,"AT+CWMODE=2\r\n");
-  HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  HAL_Delay(500);
-  sprintf(tosend,"AT+CIPMUX=1\r\n");
-  HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  HAL_Delay(500);
-  sprintf(tosend,"AT+CIPSERVER=1\r\n");
-  HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  TIM5->CCR2=500;
+  HAL_UART_Receive_IT(&huart3,&rx3_data,1);
+  sendMsg("[STM] Initializing Wifi...\r\n")
+  wifiInit();
+  
+  //TODO: wait for LR calibration signal from APP
+
+  //LR Calibration
+  HAL_TIM_IC_Start_IT(&htim2,TIM_CHANNEL_1);
+  HAL_TIM_IC_Start_IT(&htim3,TIM_CHANNEL_2);
+  sendMsg("[STM] LR-Calibration START\r\n");
+  HAL_TIM_Base_Start_IT(&htim1);
+  while(LRCALI_STATE != 1);
+  sendMsg("[STM] LR-Calibration FINISH\r\n");
+
+  //TODO: AF communication and flow
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -489,6 +565,25 @@ static void MX_TIM5_Init(void)
 
 }
 
+/* USART3 init function */
+static void MX_USART3_UART_Init(void)
+{
+
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 115200;
+  huart3.Init.WordLength = UART_WORDLENGTH_8B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Mode = UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
 /* USART6 init function */
 static void MX_USART6_UART_Init(void)
 {
@@ -591,44 +686,6 @@ void assert_failed(uint8_t* file, uint32_t line)
 
 /**
   * @}
-  * 
-//                       _oo0oo_
-//                      o8888888o
-//                      88" . "88
-//                      (| -_- |)
-//                      0\  =  /0
-//                    ___/`---'\___
-//                  .' \\|     |// '.
-//                 / \\|||  :  |||// \
-//                / _||||| -:- |||||- \
-//               |   | \\\  -  /// |   |
-//               | \_|  ''\---/''  |_/ |
-//               \  .-\__  '-'  ___/-. /
-//             ___'. .'  /--.--\  `. .'___
-//          ."" '<  `.___\_<|>_/___.' >' "".
-//         | | :  `- \`.;`\ _ /`;.`/ - ` : | |
-//         \  \ `_.   \_ __\ /__ _/   .-` /  /
-//     =====`-.____`.___ \_____/___.-`___.-'=====
-//                       `=---='
-//
-//
-//     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-//
-//               佛祖保佑         永無bug
-//
-//觀自在菩薩。行深般若波羅蜜多時。照見五蘊皆空。度一切苦厄。舍利子。色不異空。空不異色。色即是空。空即是色。受想行識。亦復如是。舍利子。是諸法空相。不生不滅。不垢不淨。不增不減。是故空中無色。無受想行識。無眼耳鼻舌身意。無色聲香味觸法。無眼界。乃至無意識界。無無明。亦無無明盡。乃至無老死。亦無老死盡。無苦集滅道。無智亦無得。以無所得故。菩提薩埵。依般若波羅蜜多故。心無罣礙。無罣礙故。無有恐怖。遠離顛倒夢想。究竟涅槃。三世諸佛。依般若波羅蜜多故。得阿耨多羅三藐三菩提。故知般若波羅蜜多。是大神咒。是大明咒。是無上咒。是無等等咒。能除一切苦。真實不虛。故說般若波羅蜜多咒。即說咒曰。揭諦揭諦　波羅揭諦　波羅僧揭諦　菩提薩婆訶
-//***************************************************
-//
-//   █████▒█    ██  ▄████▄   ██ ▄█▀       ██████╗ ██╗   ██╗ ██████╗
-// ▓██   ▒ ██  ▓██▒▒██▀ ▀█   ██▄█▒        ██╔══██╗██║   ██║██╔════╝
-// ▒████ ░▓██  ▒██░▒▓█    ▄ ▓███▄░        ██████╔╝██║   ██║██║  ███╗
-// ░▓█▒  ░▓▓█  ░██░▒▓▓▄ ▄██▒▓██ █▄        ██╔══██╗██║   ██║██║   ██║
-// ░▒█░   ▒▒█████▓ ▒ ▓███▀ ░▒██▒ █▄       ██████╔╝╚██████╔╝╚██████╔╝
-//  ▒ ░   ░▒▓▒ ▒ ▒ ░ ░▒ ▒  ░▒ ▒▒ ▓▒       ╚═════╝  ╚═════╝  ╚═════╝
-//  ░     ░░▒░ ░ ░   ░  ▒   ░ ░▒ ▒░
-//  ░ ░    ░░░ ░ ░ ░        ░ ░░ ░
-//           ░     ░ ░      ░  ░
-//                 ░
   */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
