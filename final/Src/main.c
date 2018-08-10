@@ -83,23 +83,23 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void sendMsg(char*);
 void tellWifi(char*);
 void wifiInit();
-void LRCalibrate();
+void LRCalibrate(double,double);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
 
 // Sending msg to UART3
 void sendMsg(char* str){
-  HAL_UART_Transmit(&huart3,str,sizeof(str),0xffff);
+	HAL_UART_Transmit(&huart3,str,sizeof(str),0xffff);
 }
 
 // Sending msg to UART6
 void tellWifi(char* str){
-  HAL_UART_Transmit(&huart6,str,sizeof(str),0xffff);
+	HAL_UART_Transmit(&huart6,str,sizeof(str),0xffff);
 }
 
 // Handling UART Receive
-char rx6_buf[100],rx6_data,rx3_buf[100],rx3_data;
+char rx6_buf[100],rx6_data,rx3_buf[100],rx3_data,state;
 int rx6_index=0,rx3_index=0;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if(huart->Instance==USART3){
@@ -114,8 +114,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 			char tosend[200]={0};
 			sprintf(tosend,"[STM] Send to ESP : %s",rx3_buf);
 			sendMsg(tosend);
-      tellWifi(rx3_buf);
-      sendMsg("[STM] Done\r\n");
+			tellWifi(rx3_buf);
+			sendMsg("[STM] Done\r\n");
 		}
 		HAL_UART_Receive_IT(&huart3,&rx3_data,1);
 	}
@@ -132,7 +132,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 			    rx6_index=0;
 			    char tosend[150]={0};
 			    sprintf(tosend,"[ESP] %s\r\n",rx6_buf);
-          sendMsg(tosend);
+			    sendMsg(tosend);
 			    state=rx6_buf[rx6_index-2];
 	  	  }
 	  	HAL_UART_Receive_IT(&huart6,&rx6_data,1);
@@ -141,11 +141,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 // Handling wifi initialize
 void wifiInit(){
-  tellWifi("AT+CWMODE=2\r\n");
-  HAL_Delay(500);
-  tellWifi("AT+CIPMUX=1\r\n");
-  HAL_Delay(500);
-  tellWifi("AT+CIPSERVER=1\r\n");
+	tellWifi("AT+CWMODE=2\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPMUX=1\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPSERVER=1\r\n");
+	HAL_Delay(500);
 }
 
 // Handling LR calibration
@@ -153,33 +154,32 @@ int inta=0,intb=0,floata=0,floatb=0;
 double distancea=0,distanceb=0;
 int ultrasonic=0;  // 0 for Ultrasonic1 , 1 for ultrasonic2 , 2 for motor
 int LRCALI_STATE=0;
-void LRCalibrate(){
+void LRCalibrate(double dl,double dr){
 	if(ultrasonic==2){
       char tosend[50]={0};
-		  double dl=distancea,dr=distanceb;
 		  if(dl*LRCALI_MAXVALUE>dr && dr*LRCALI_MAXVALUE>dl){
 			  if( (dr-dl)>LRCALI_MINVALUE ||(dl-dr)>LRCALI_MINVALUE ){
 				  if(dl>dr){
-            sprintf(tosend,"> %d.%02d , %d.%02d -> Turn L\r\n",inta,floata,intb,floatb);
-            sendMsg(tosend);
+					  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn L\r\n",inta,floata,intb,floatb);
+					  sendMsg(tosend);
 					  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,1);
 					  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
 				  }else if(dl<dr){
-            sprintf(tosend,"> %d.%02d , %d.%02d -> Turn R\r\n",inta,floata,intb,floatb);
-            sendMsg(tosend);
+					  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn R\r\n",inta,floata,intb,floatb);
+					  sendMsg(tosend);
 					  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,0);
 					  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
 				  }
 			  }else{
-          sprintf(tosend,"> %d.%02d , %d.%02d -> DONE\r\n",inta,floata,intb,floatb);
-          sendMsg(tosend);
+				  sprintf(tosend,"> %d.%02d , %d.%02d -> DONE\r\n",inta,floata,intb,floatb);
+				  sendMsg(tosend);
 				  LRCALI_STATE=1;
-          return void;
+				  return;
 			  }
 		  }else{
-        sprintf(tosend,"> %d.%02d , %d.%02d -> X\r\n",inta,floata,intb,floatb);
-        sendMsg(tosend);
-      }
+			  sprintf(tosend,"> %d.%02d , %d.%02d -> X\r\n",inta,floata,intb,floatb);
+			  sendMsg(tosend);
+		  }
 		  ultrasonic=0;
 		  HAL_TIM_Base_Start_IT(&htim1);
 	  }
@@ -208,7 +208,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			intb=(int)distanceb;
 			floatb=(int)((distanceb-intb)*100);
 			ultrasonic=2;
-      LRCalibrate();
+			LRCalibrate(distancea,distanceb);
 		}
 	}
 }
@@ -304,7 +304,7 @@ int main(void)
   // Receiving UART msg
   HAL_UART_Receive_IT(&huart6,&rx6_data,1);
   HAL_UART_Receive_IT(&huart3,&rx3_data,1);
-  sendMsg("[STM] Initializing Wifi...\r\n")
+  sendMsg("[STM] Initializing Wifi...\r\n");
   wifiInit();
   
   //TODO: wait for LR calibration signal from APP
