@@ -169,7 +169,6 @@
 <text x="68.58" y="35.56" size="0.8128" layer="51">3.3V</text>
 <text x="25.4" y="63.5" size="0.8128" layer="51">D0</text>
 <text x="25.4" y="60.96" size="0.8128" layer="51">D1</text>
-<text x="25.4" y="50.8" size="0.8128" layer="51">D5</text>
 <text x="25.4" y="21.59" size="0.8128" layer="51">D14</text>
 <text x="25.4" y="19.05" size="0.8128" layer="51">D15</text>
 <text x="25.4" y="26.67" size="0.8128" layer="51">GND</text>
@@ -179,7 +178,6 @@
 <text x="60.96" y="52.07" size="0.8128" layer="51">BLUE</text>
 <text x="60.96" y="49.53" size="0.8128" layer="51">GREEN</text>
 <text x="60.96" y="46.99" size="0.8128" layer="51">BLACK</text>
-<text x="25.4" y="48.26" size="0.8128" layer="51">D6</text>
 <text x="49.53" y="41.91" size="0.8128" layer="51" font="vector" align="center">SCREW
 THIS
 SITE</text>

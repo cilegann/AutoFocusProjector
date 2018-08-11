@@ -404,7 +404,12 @@ design rules under a new name.</description>
 <vertex x="-41.91" y="170.18"/>
 <vertex x="-99.06" y="170.18"/>
 </polygon>
-<wire x1="-81.28" y1="105.41" x2="-96.52" y2="104.14" width="0" layer="19" extent="1-1"/>
+<polygon width="0.6096" layer="1" isolate="0.6096">
+<vertex x="-99.06" y="85.09"/>
+<vertex x="-41.91" y="85.09"/>
+<vertex x="-41.91" y="170.18"/>
+<vertex x="-99.06" y="170.18"/>
+</polygon>
 </signal>
 <signal name="S$1">
 <via x="-53.34" y="167.64" extent="1-16" drill="1" shape="square"/>
