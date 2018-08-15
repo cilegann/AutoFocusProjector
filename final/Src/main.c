@@ -98,9 +98,18 @@ void tellWifi(char* str){
 	HAL_UART_Transmit(&huart6,str,sizeof(str),0xffff);
 }
 
+void sendMsgThrWifi(char* str){
+  char tosend[20]={0};
+  sprintf(tosend,"AT+CIPSEND=0,%d\r\n",sizeof(str));
+  tellWifi(tosend);
+  HAL_Delay(500);
+  tellWifi(str);
+}
+
 // Handling UART Receive
 char rx6_buf[100],rx6_data,rx3_buf[100],rx3_data,state;
 int rx6_index=0,rx3_index=0;
+char state=0;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if(huart->Instance==USART3){
 		if(rx3_index==0){
@@ -308,7 +317,7 @@ int main(void)
   wifiInit();
   
   //TODO: wait for LR calibration signal from APP
-
+  while(state!='S');
   //LR Calibration
   HAL_TIM_IC_Start_IT(&htim2,TIM_CHANNEL_1);
   HAL_TIM_IC_Start_IT(&htim3,TIM_CHANNEL_2);
@@ -318,7 +327,28 @@ int main(void)
   sendMsg("[STM] LR-Calibration FINISH\r\n");
 
   //TODO: AF communication and flow
-
+  sendMsg("[STM] Focus-Calibration START\r\n");
+  while(1){
+    if(state=='U'){
+      sendMsg("[STM] Upward\r\n");
+      //FIXME:Upward
+      HAL_GPIO_WritePin(GPIOG,GPIO_PIN_12,0);
+      HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+      state=0;
+      sendMsgThrWifi("K\r\n");
+    }else if(state=='D'){
+      sendMsg("[STM] Downward\r\n");
+      //FIXME:Downward
+      HAL_GPIO_WritePin(GPIOG,GPIO_PIN_12,1);
+      HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+      state=0;
+      sendMsgThrWifi("K\r\n");
+    }else if(state=='K'){
+      sendMsg("[STM] Focus-Calibration DONE\r\n");
+      break;
+    }
+    HAL_Deley(100);
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
