@@ -85,6 +85,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 		  		  sprintf(tosend,"\r\nESP8266:\r\n%s",rx6_buf);
 		  		  HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
 		  		  if(rx6_buf[rx6_index-1]=='%'){
+		  			  	HAL_UART_Transmit(&huart3,"start\r\n",7,0xffff);
 		  			  	HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,rx6_buf[rx6_index-2]-'0');
 		  				HAL_TIM_PWM_Start_IT(&htim2,TIM_CHANNEL_3);
 		  		  }
