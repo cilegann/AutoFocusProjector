@@ -58,7 +58,7 @@ UART_HandleTypeDef huart6;
 /* Private variables ---------------------------------------------------------*/
 #define LRCALI_MINVALUE 0.5
 #define LRCALI_MAXVALUE 12
-#define LRCALI_PWMWIDTH 100
+#define LRCALI_PWMWIDTH 500
 #define LRCALI_ULPERIOD 7000 // xK = x us
 int AFCALI_PWMWIDTH = 1000;
 
@@ -205,13 +205,17 @@ void LRCalibrate(double dl,double dr){
 			  if(dl>dr){
 				  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn R\r\n",inta,floata,intb,floatb);
 				  sendMsg(tosend);
-				  HAL_GPIO_WritePin(DCMOT_DIR_GRP,DCMOT_DIR_PIN,1);
+				  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,0);
+				  sprintf(tosend,"> > ReadPin: %d\r\n",HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_9));
+				  sendMsg(tosend);
 				  motorMoveDone=0;
 				  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
 			  }else if(dl<dr){
 				  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn L\r\n",inta,floata,intb,floatb);
 				  sendMsg(tosend);
-				  HAL_GPIO_WritePin(DCMOT_DIR_GRP,DCMOT_DIR_PIN,0);
+				  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,1);
+				  sprintf(tosend,"> > ReadPin: %d\r\n",HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_9));
+				  sendMsg(tosend);
 				  motorMoveDone=0;
 				  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
 			  }
@@ -227,9 +231,6 @@ void LRCalibrate(double dl,double dr){
 	  }
 
 	  ultrasonic=0;
-	  while(!motorMoveDone);
-	  HAL_TIM_Base_Start_IT(&htim1);
-
 }
 
 // Handling Ultrasonic Echo InputCapture
@@ -243,7 +244,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			inta=(int)distancea;
 			floata=(int)((distancea-inta)*100);
 			ultrasonic=1;
-			HAL_TIM_Base_Start_IT(&htim1);
 		}
 	}
 	if(htim->Instance==TIM3){
@@ -255,7 +255,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			intb=(int)distanceb;
 			floatb=(int)((distanceb-intb)*100);
 			ultrasonic=2;
-			LRCalibrate(distancea,distanceb);
 		}
 	}
 }
@@ -403,6 +402,9 @@ int main(void)
   HAL_Delay(500);
   TIM4->CCR3=0;
 
+  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,0);
+  HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_3);
+  while(1);
 /*
   while(state!='S'){
 	  HAL_Delay(100);
@@ -414,8 +416,22 @@ int main(void)
 
   sendMsg("[STM] LR-Calibration START\r\n");
   HAL_Delay(500);
-  HAL_TIM_Base_Start_IT(&htim1);
-  while(LRCALI_STATE != 1);
+
+  while(LRCALI_STATE != 1){
+	  HAL_TIM_Base_Start_IT(&htim1);
+	  while(ultrasonic!=1){
+		  HAL_Delay(100);
+	  }
+	  HAL_TIM_Base_Start_IT(&htim1);
+	  while(ultrasonic!=2){
+		  HAL_Delay(100);
+	  }
+	  LRCalibrate(distancea,distanceb);
+	  while(!motorMoveDone){
+		  HAL_Delay(100);
+	  }
+  }
+
   HAL_Delay(1000);
   sendMsg("[STM] LR-Calibration FINISH\r\n");
 
