@@ -45,7 +45,7 @@
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim5;
 
 UART_HandleTypeDef huart3;
 UART_HandleTypeDef huart6;
@@ -60,7 +60,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USART6_UART_Init(void);
-static void MX_TIM2_Init(void);                                    
+static void MX_TIM5_Init(void);                                    
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
                                 
 
@@ -68,39 +68,52 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 /* Private function prototypes -----------------------------------------------*/
 char rx6_buf[100],rx6_data;
 int rx6_index=-1;
+char rx3_buf[100],rx3_data;
+int rx3_index=-1;
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-	  if(huart->Instance==USART6){
-		  	  if(rx6_index==0){
-		  			for(int i=0;i<100;i++){
-		  				rx6_buf[i]=0;
-		  			}
-		  		}
-		  	  rx6_buf[rx6_index++]=rx6_data;
-		  	  if((rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='K')||(rx6_buf[rx6_index-5]=='R'&&rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='R')||(rx6_buf[rx6_index-5]=='E'&&rx6_buf[rx6_index-4]=='C'&&rx6_buf[rx6_index-3]=='T')||rx6_buf[rx6_index-1]=='%'){
-
-		  		  char tosend[100]={0};
-		  		  sprintf(tosend,"\r\nESP8266:\r\n%s",rx6_buf);
-		  		  HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
-		  		  if(rx6_buf[rx6_index-1]=='%'){
-		  			  	HAL_UART_Transmit(&huart3,"start\r\n",7,0xffff);
-		  			  	HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,rx6_buf[rx6_index-2]-'0');
-		  				HAL_TIM_PWM_Start_IT(&htim2,TIM_CHANNEL_3);
-		  		  }
-		  		rx6_index=0;
-		  	  }
-
-		  	HAL_UART_Receive_IT(&huart6,&rx6_data,1);
-
+	if(huart->Instance==USART3){
+		if(rx3_data=='U'){
+			HAL_GPIO_WritePin(GPIOG,GPIO_PIN_12,1);
+			HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+		}else if(rx3_data=='D'){
+			HAL_GPIO_WritePin(GPIOG,GPIO_PIN_12,0);
+			HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
 		}
+		HAL_UART_Receive_IT(&huart3,&rx3_data,1);
+
+	}
+	if(huart->Instance==USART6){
+		  if(rx6_index==0){
+				for(int i=0;i<100;i++){
+					rx6_buf[i]=0;
+				}
+			}
+		  rx6_buf[rx6_index++]=rx6_data;
+		  if((rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='K')||(rx6_buf[rx6_index-5]=='R'&&rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='R')||(rx6_buf[rx6_index-5]=='E'&&rx6_buf[rx6_index-4]=='C'&&rx6_buf[rx6_index-3]=='T')||rx6_buf[rx6_index-1]=='%'){
+
+			  char tosend[100]={0};
+			  sprintf(tosend,"\r\nESP8266:\r\n%s",rx6_buf);
+			  HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
+			  if(rx6_buf[rx6_index-1]=='%'){
+					HAL_UART_Transmit(&huart3,"start\r\n",7,0xffff);
+					HAL_GPIO_WritePin(GPIOG,GPIO_PIN_12,rx6_buf[rx6_index-2]-'0');
+					HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+			  }
+			rx6_index=0;
+		  }
+
+		HAL_UART_Receive_IT(&huart6,&rx6_data,1);
+
+	}
 }
 int pwmCount=0;
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance==TIM2){
-		if(pwmCount++>=1000){
-			HAL_TIM_PWM_Stop_IT(&htim2,TIM_CHANNEL_3);
+	if(htim->Instance==TIM5){
+		if(pwmCount++>=200){
+			HAL_TIM_PWM_Stop_IT(&htim5,TIM_CHANNEL_2);
 			HAL_UART_Transmit(&huart3,"stop\r\n",6,0xffff);
 			pwmCount=0;
 		}
@@ -139,9 +152,11 @@ int main(void)
   MX_GPIO_Init();
   MX_USART3_UART_Init();
   MX_USART6_UART_Init();
-  MX_TIM2_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart6,&rx6_data,1);
+  HAL_UART_Receive_IT(&huart3,&rx3_data,1);
+  /*
   char tosend[100]={0};
   HAL_Delay(500);
   sprintf(tosend,"AT\r\n");
@@ -155,8 +170,8 @@ int main(void)
   HAL_Delay(500);
   sprintf(tosend,"AT+CIPSERVER=1\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  TIM2->CCR3=500;
-  //HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_3);
+  */
+  TIM5->CCR2=500;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -226,26 +241,26 @@ void SystemClock_Config(void)
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
-/* TIM2 init function */
-static void MX_TIM2_Init(void)
+/* TIM5 init function */
+static void MX_TIM5_Init(void)
 {
 
   TIM_MasterConfigTypeDef sMasterConfig;
   TIM_OC_InitTypeDef sConfigOC;
 
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 15;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 1000;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 15;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 1000;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  if (HAL_TIM_PWM_Init(&htim5) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -254,12 +269,12 @@ static void MX_TIM2_Init(void)
   sConfigOC.Pulse = 500;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  HAL_TIM_MspPostInit(&htim2);
+  HAL_TIM_MspPostInit(&htim5);
 
 }
 
@@ -322,12 +337,22 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_12, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : PB4 */
   GPIO_InitStruct.Pin = GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PG12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
 }
 

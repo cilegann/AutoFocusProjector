@@ -54,9 +54,9 @@ UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-#define LRCALI_MINVALUE 1
+#define LRCALI_MINVALUE 0.1
 #define LRCALI_MAXVALUE 12
-#define LRCALI_PWMWIDTH 50
+#define LRCALI_PWMWIDTH 70
 #define LRCALI_ULPERIOD 7000 // xK = x us
 /* USER CODE END PV */
 
