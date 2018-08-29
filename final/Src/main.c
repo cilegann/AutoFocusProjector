@@ -306,7 +306,6 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
 			pwm5Count=0;
 			accumMove+=1;
 			a4988MoveDone=1;
-			sendMsgThrWifi("N");
 		}
 	}
 }
@@ -322,11 +321,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		}else{
 			HAL_TIM_PWM_Stop(&htim5,TIM_CHANNEL_2);
 		}
+		HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
+		HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
 		pwm5Count=0;
 		focusState='T';
 		a4988MoveDone=1;
-		sendMsgThrWifi("T");
 	    sendMsg("[STM] Focus TOP\r\n");
+
 	}else if(GPIO_Pin==GPIO_PIN_15){
 		//bottom
 		if(pwmMode=='N'){
@@ -334,11 +335,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		}else{
 			HAL_TIM_PWM_Stop(&htim5,TIM_CHANNEL_2);
 		}
+		HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
+		HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+		sendMsg("[STM] Focus BOTTOM\r\n");
 		pwm5Count=0;
 		focusState='B';
 		a4988MoveDone=1;
-		sendMsgThrWifi("B");
-	    sendMsg("[STM] Focus BOTTOM\r\n");
+		sendMsg("[STM] Focus BOTTOM\r\n");
 	}
 }
 
@@ -436,14 +439,15 @@ int main(void)
   //TODO AF communication and flow
   sendMsg("[STM] Focus-Calibration START\r\n");
   //move to bottom
-  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
+  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
   pwmMode='N';
   HAL_TIM_PWM_Start(&htim5,TIM_CHANNEL_2);
   while(focusState!='B');
+  sendMsgThrWifi("B");
 
   //move upward and send 'N' after moving until TOP (send 'T')
   sendMsgThrWifi("N");
-  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
+  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
   pwmMode='I';
   while(focusState!='T'){
 	  a4988MoveDone=0;
@@ -455,7 +459,7 @@ int main(void)
   sendMsgThrWifi("T");
   //TODO move downward base on recvNum
   while(state!='R');
-  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
+  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
   for(int i=0;i<recvNum;i++){
 	  a4988MoveDone=0;
 	  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
@@ -473,14 +477,14 @@ int main(void)
 		  sendMsg("[STM] Upward\r\n");
 		  state=0;
 		  pwmMode='I';
-		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
+		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
 		  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
 		  break;
 	  case 'D':
 		  sendMsg("[STM] Downward\r\n");
 		  state=0;
 		  pwmMode='I';
-		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
+		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
 		  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
 		  break;
 	  //TODO top bottom finish
@@ -488,11 +492,11 @@ int main(void)
 		  sendMsg("[STM] Top\r\n");
 		  state=0;
 		  pwmMode='N';
-		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
+		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
 		  HAL_TIM_PWM_Start(&htim5,TIM_CHANNEL_2);
 		  break;
 	  case 'B':
-		  sendMsg("[STM] Top\r\n");
+		  sendMsg("[STM] Bottom\r\n");
 		  state=0;
 		  pwmMode='N';
 		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);

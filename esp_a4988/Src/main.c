@@ -156,7 +156,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart6,&rx6_data,1);
   HAL_UART_Receive_IT(&huart3,&rx3_data,1);
-  /*
+
   char tosend[100]={0};
   HAL_Delay(500);
   sprintf(tosend,"AT\r\n");
@@ -168,9 +168,9 @@ int main(void)
   sprintf(tosend,"AT+CIPMUX=1\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
   HAL_Delay(500);
-  sprintf(tosend,"AT+CIPSERVER=1\r\n");
+  sprintf(tosend,"AT+CIPSERVER=1,66\r\n");
   HAL_UART_Transmit(&huart6,tosend,sizeof(tosend),0xffff);
-  */
+
   TIM5->CCR2=500;
   /* USER CODE END 2 */
 
