@@ -56,9 +56,9 @@ UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-#define LRCALI_MINVALUE 0.5
+#define LRCALI_MINVALUE 0.3
 #define LRCALI_MAXVALUE 12
-#define LRCALI_PWMWIDTH 500
+#define LRCALI_PWMWIDTH 1000
 #define LRCALI_ULPERIOD 7000 // xK = x us
 int AFCALI_PWMWIDTH = 1000;
 
@@ -77,7 +77,7 @@ int AFCALI_PWMWIDTH = 1000;
 #define DCMOT_PWM_GRP GPIOB
 #define DCMOT_PWM_PIN GPIO_PIN_8
 #define DCMOT_DIR_GRP GPIOB
-#define DCMOT_DIR_PIN GPIO_PIN_9
+#define DCMOT_DIR_PIN GPIO_PIN_14
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -205,16 +205,16 @@ void LRCalibrate(double dl,double dr){
 			  if(dl>dr){
 				  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn R\r\n",inta,floata,intb,floatb);
 				  sendMsg(tosend);
-				  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,0);
-				  sprintf(tosend,"> > ReadPin: %d\r\n",HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_9));
+				  HAL_GPIO_WritePin(DCMOT_DIR_GRP,DCMOT_DIR_PIN,1);
+				  sprintf(tosend,"> > ReadPin: %d\r\n",HAL_GPIO_ReadPin(DCMOT_DIR_GRP,DCMOT_DIR_PIN));
 				  sendMsg(tosend);
 				  motorMoveDone=0;
 				  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
 			  }else if(dl<dr){
 				  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn L\r\n",inta,floata,intb,floatb);
 				  sendMsg(tosend);
-				  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,1);
-				  sprintf(tosend,"> > ReadPin: %d\r\n",HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_9));
+				  HAL_GPIO_WritePin(DCMOT_DIR_GRP,DCMOT_DIR_PIN,0);
+				  sprintf(tosend,"> > ReadPin: %d\r\n",HAL_GPIO_ReadPin(DCMOT_DIR_GRP,DCMOT_DIR_PIN));
 				  sendMsg(tosend);
 				  motorMoveDone=0;
 				  HAL_TIM_PWM_Start_IT(&htim4,TIM_CHANNEL_3);
@@ -402,9 +402,7 @@ int main(void)
   HAL_Delay(500);
   TIM4->CCR3=0;
 
-  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9,0);
-  HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_3);
-  while(1);
+
 /*
   while(state!='S'){
 	  HAL_Delay(100);
@@ -834,7 +832,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5|GPIO_PIN_9|GPIO_PIN_13|GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5|GPIO_PIN_9|GPIO_PIN_13|GPIO_PIN_12 
+                          |GPIO_PIN_14, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, GPIO_PIN_12, GPIO_PIN_RESET);
@@ -842,8 +841,10 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PB5 PB9 PB13 PB12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_9|GPIO_PIN_13|GPIO_PIN_12;
+  /*Configure GPIO pins : PB5 PB9 PB13 PB12 
+                           PB14 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_9|GPIO_PIN_13|GPIO_PIN_12 
+                          |GPIO_PIN_14;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
