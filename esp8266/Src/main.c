@@ -88,23 +88,19 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 		HAL_UART_Receive_IT(&huart3,&rx3_data,1);
 	}
   if(huart->Instance==USART6){
-	  	  if(rx6_index==0){
-	  			for(int i=0;i<100;i++){
-	  				rx6_buf[i]=0;
-	  			}
-	  	  }
-	  	  if(rx6_data=='$' || rx6_index>0){
-	  		  rx6_buf[rx6_index++]=rx6_data;
-	  	  }
-	  	  if(rx6_data=='%'){
-			  rx6_index=0;
-			  char tosend[150]={0};
-			  sprintf(tosend,"[ESP] %s\r\n",rx6_buf);
-			  HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
-			  state=rx6_buf[rx6_index-2];
-	  	  }
-
-	  	HAL_UART_Receive_IT(&huart6,&rx6_data,1);
+		if(rx6_index==0){
+			for(int i=0;i<100;i++){
+				rx6_buf[i]=0;
+			}
+		}
+		rx6_buf[rx6_index++]=rx6_data;
+		if((rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='K')||(rx6_buf[rx6_index-5]=='R'&&rx6_buf[rx6_index-4]=='O'&&rx6_buf[rx6_index-3]=='R')||(rx6_buf[rx6_index-5]=='E'&&rx6_buf[rx6_index-4]=='C'&&rx6_buf[rx6_index-3]=='T')||rx6_buf[rx6_index-1]=='%'){
+			char tosend[100]={0};
+			sprintf(tosend,"\r\n[ESP8266]: \r\n%s",rx6_buf);
+			HAL_UART_Transmit(&huart3,&tosend,sizeof(tosend),0xffff);
+			rx6_index=0;
+		}
+		HAL_UART_Receive_IT(&huart6,&rx6_data,1);
 
 	}
 }

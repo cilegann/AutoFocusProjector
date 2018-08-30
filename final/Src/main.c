@@ -60,7 +60,8 @@ UART_HandleTypeDef huart6;
 #define LRCALI_MAXVALUE 12
 #define LRCALI_PWMWIDTH 1000
 #define LRCALI_ULPERIOD 7000 // xK = x us
-int AFCALI_PWMWIDTH = 1000;
+int AFCALI_PWMWIDTH = 500;
+#define AFCALI_EX_PWMWIDTH 100
 
 #define A4988_PWM_GRP GPIOA
 #define A4988_PWM_PIN GPIO_PIN_2
@@ -108,9 +109,9 @@ void LRCalibrate(double,double);
 //str to int
 int str2int(char* str){
 	int ans=0;
-	for(int i=1;i<sizeof(str);i++){
+	for(int i=1;i<strlen(str)-1;i++){
 		ans*=10;
-		ans+=str[i]-'0';
+		ans+=(str[i]-'0');
 	}
 	return ans;
 }
@@ -126,12 +127,12 @@ void tellWifi(char* str){
 }
 
 void sendMsgThrWifi(char* str){
-  char tosend[20]={0};
-  sprintf(tosend,"AT+CIPSEND=0,%d\r\n",sizeof(str));
-  tellWifi(tosend);
-  HAL_Delay(500);
-  sprintf(tosend,"%s\r\n");
-  tellWifi(tosend);
+//  char tosend[20]={0};
+//  sprintf(tosend,"AT+CIPSEND=0,%d\r\n",sizeof(str));
+//  tellWifi(tosend);
+//  HAL_Delay(500);
+//  sprintf(tosend,"%s\r\n");
+//  tellWifi(tosend);
 }
 
 // Handling UART Receive
@@ -141,21 +142,30 @@ char state=0;
 int recvNum=0;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if(huart->Instance==USART3){
-		if(rx3_index==0){
-			for(int i=0;i<100;i++){
-				rx3_buf[i]=0;
+		if(rx3_data=='U'){
+			HAL_GPIO_WritePin(GPIOG,GPIO_PIN_12,1);
+			HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+		}else if(rx3_data=='D'){
+			HAL_GPIO_WritePin(GPIOG,GPIO_PIN_12,0);
+			HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+		}else{
+			if(rx3_index==0){
+				for(int i=0;i<100;i++){
+					rx3_buf[i]=0;
+				}
 			}
+			rx3_buf[rx3_index++]=rx3_data;
+			if(rx3_data=='\n'){
+				rx3_index=0;
+				char tosend[200]={0};
+				sprintf(tosend,"[STM] Send to ESP : %s",rx3_buf);
+				sendMsg(tosend);
+				tellWifi(rx3_buf);
+				sendMsg("[STM] Done\r\n");
+			}
+			HAL_UART_Receive_IT(&huart3,&rx3_data,1);
 		}
-		rx3_buf[rx3_index++]=rx3_data;
-		if(rx3_data=='\n'){
-			rx3_index=0;
-			char tosend[200]={0};
-			sprintf(tosend,"[STM] Send to ESP : %s",rx3_buf);
-			sendMsg(tosend);
-			tellWifi(rx3_buf);
-			sendMsg("[STM] Done\r\n");
-		}
-		HAL_UART_Receive_IT(&huart3,&rx3_data,1);
+
 	}
   if(huart->Instance==USART6){
 	  	  if(rx6_index==0){
@@ -290,6 +300,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 // Handling PWM Pulse
 int pwm5Count=0,pwm4Count=0,a4988MoveDone=0,accumMove=0;
+char focusStepState='N'; //N for normal, E for extreme
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
   //DC MOTOR PWM
   if(htim->Instance==TIM4){
@@ -301,17 +312,28 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
 	}
   //A4988 PWM
   if(htim->Instance==TIM5){
+	  if(focusStepState=='N'){
 		if(pwm5Count++>=AFCALI_PWMWIDTH){
 			HAL_TIM_PWM_Stop_IT(&htim5,TIM_CHANNEL_2);
 			pwm5Count=0;
 			accumMove+=1;
 			a4988MoveDone=1;
 		}
+	  }else{
+		if(pwm5Count++>=AFCALI_EX_PWMWIDTH){
+			HAL_TIM_PWM_Stop_IT(&htim5,TIM_CHANNEL_2);
+			pwm5Count=0;
+			a4988MoveDone=1;
+			focusStepState='N';
+			sendMsg("[STM] Recover");
+		}
+	  }
 	}
 }
 
 char pwmMode='N'; //N for normal , I for IT
 char focusState='N'; // N for normal, T for top, B for Bottom
+
 // TODO Handling TOP BUTTOM
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin==GPIO_PIN_13){
@@ -321,6 +343,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		}else{
 			HAL_TIM_PWM_Stop(&htim5,TIM_CHANNEL_2);
 		}
+		focusStepState='E';
 		HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
 		HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
 		pwm5Count=0;
@@ -336,8 +359,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 			HAL_TIM_PWM_Stop(&htim5,TIM_CHANNEL_2);
 		}
 		HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
+		focusStepState='E';
 		HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
-		sendMsg("[STM] Focus BOTTOM\r\n");
 		pwm5Count=0;
 		focusState='B';
 		a4988MoveDone=1;
@@ -406,11 +429,11 @@ int main(void)
   TIM4->CCR3=0;
 
 
-/*
+
   while(state!='S'){
 	  HAL_Delay(100);
   }
-*/
+
   //LR Calibration
   HAL_TIM_IC_Start_IT(&htim2,TIM_CHANNEL_1);
   HAL_TIM_IC_Start_IT(&htim3,TIM_CHANNEL_2);
@@ -442,50 +465,71 @@ int main(void)
   HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
   pwmMode='N';
   HAL_TIM_PWM_Start(&htim5,TIM_CHANNEL_2);
-  while(focusState!='B');
-  sendMsgThrWifi("B");
+  while(focusState!='B'){
+	  HAL_Delay(100);
+  }
 
   //move upward and send 'N' after moving until TOP (send 'T')
   sendMsgThrWifi("N");
+
   HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
   pwmMode='I';
   while(focusState!='T'){
 	  a4988MoveDone=0;
 	  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
-	  while(a4988MoveDone==0);
+	  while(a4988MoveDone==0){
+		  HAL_Delay(10);
+	  }
+	  sendMsg("[STM] Move Upward Done\r\n");
 	  sendMsgThrWifi("N");
-	  HAL_Delay(100);
+	  HAL_Delay(300);
   }
+  sendMsg("[STM] Cruise Done\r\n");
   sendMsgThrWifi("T");
+
   //TODO move downward base on recvNum
-  while(state!='R');
+  while(state!='R'){
+	  HAL_Delay(10);
+  }
   HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
   for(int i=0;i<recvNum;i++){
 	  a4988MoveDone=0;
 	  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
-	  while(a4988MoveDone==0);
+	  while(a4988MoveDone==0){
+		  HAL_Delay(10);
+	  }
+	  HAL_Delay(100);
   }
   state=0;
-  sendMsgThrWifi("N");
+  sendMsgThrWifi("K");
+
 
   //TODO Fine tune
-
+  AFCALI_PWMWIDTH=100;
   while(1){
-	  while(state==0);
+	  while(state==0){
+		  HAL_Delay(10);
+	  }
 	  switch(state){
 	  case 'U':
 		  sendMsg("[STM] Upward\r\n");
 		  state=0;
+		  a4988MoveDone=0;
 		  pwmMode='I';
 		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
 		  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+		  while(a4988MoveDone==0);
+		  sendMsgThrWifi("K");
 		  break;
 	  case 'D':
 		  sendMsg("[STM] Downward\r\n");
 		  state=0;
+		  a4988MoveDone=0;
 		  pwmMode='I';
 		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
 		  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
+		  while(a4988MoveDone==0);
+		  sendMsgThrWifi("K");
 		  break;
 	  //TODO top bottom finish
 	  case 'T':
@@ -509,29 +553,6 @@ int main(void)
 	  }
 
   }
-  while(1)
-  /*
-  while(1){
-    if(state=='U'){
-      sendMsg("[STM] Upward\r\n");
-      state=0;
-      HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
-      HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
-    }else if(state=='D'){
-      sendMsg("[STM] Downward\r\n");
-      state=0;
-      HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
-      HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
-    }else if(state=='F'){
-      sendMsg("[STM] Focus-Calibration DONE\r\n");
-      break;
-    }
-    HAL_Delay(100);
-  }
-  */
-
-
-
 
   /* USER CODE END 2 */
 
