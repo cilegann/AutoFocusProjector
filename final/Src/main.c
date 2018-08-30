@@ -127,12 +127,12 @@ void tellWifi(char* str){
 }
 
 void sendMsgThrWifi(char* str){
-//  char tosend[20]={0};
-//  sprintf(tosend,"AT+CIPSEND=0,%d\r\n",sizeof(str));
-//  tellWifi(tosend);
-//  HAL_Delay(500);
-//  sprintf(tosend,"%s\r\n");
-//  tellWifi(tosend);
+  char tosend[20]={0};
+  sprintf(tosend,"AT+CIPSEND=0,%d\r\n",strlen(str));
+  tellWifi(tosend);
+  HAL_Delay(500);
+  sprintf(tosend,"%s\r\n",str);
+  tellWifi(tosend);
 }
 
 // Handling UART Receive
@@ -195,11 +195,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 // Handling wifi initialize
 void wifiInit(){
-	sendMsg("FUCK 1\r\n");
 	tellWifi("AT+CWMODE=2\r\n");
+	HAL_Delay(500);
 	tellWifi("AT+CIPMUX=1\r\n");
+	HAL_Delay(500);
 	tellWifi("AT+CIPSERVER=1\r\n");
-	sendMsg("FUCK 2\r\n");
+	HAL_Delay(500);
 }
 
 // Handling LR calibration
@@ -325,7 +326,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
 			pwm5Count=0;
 			a4988MoveDone=1;
 			focusStepState='N';
-			sendMsg("[STM] Recover");
+			sendMsg("[STM] Recover Done\r\n");
 		}
 	  }
 	}
@@ -349,7 +350,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		pwm5Count=0;
 		focusState='T';
 		a4988MoveDone=1;
-	    sendMsg("[STM] Focus TOP\r\n");
+	    sendMsg("[STM] <<TOP>>\r\n");
 
 	}else if(GPIO_Pin==GPIO_PIN_15){
 		//bottom
@@ -364,7 +365,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		pwm5Count=0;
 		focusState='B';
 		a4988MoveDone=1;
-		sendMsg("[STM] Focus BOTTOM\r\n");
+		sendMsg("[STM] <<BOTTOM>>\r\n");
 	}
 }
 
@@ -393,7 +394,7 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInitre */
 
   /* USER CODE END SysInit */
 
@@ -407,26 +408,28 @@ int main(void)
   MX_TIM1_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  sendMsg("[STM] Initializing Board...\r\n");
   HAL_UART_Receive_IT(&huart6,&rx6_data,1);
   HAL_UART_Receive_IT(&huart3,&rx3_data,1);
   HAL_GPIO_WritePin(GPIOC,GPIO_PIN_1,1);
   HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12,1);
+  TIM4->CCR3=0;
+  sendMsg("[STM] Board Ready\r\n");
+  HAL_Delay(500);
 
   sendMsg("[STM] Initializing Wifi...\r\n");
   HAL_Delay(500);
 
-  tellWifi("AT+CWMODE=2\r\n");
-  HAL_Delay(500);
-
-  tellWifi("AT+CIPMUX=1\r\n");
-  HAL_Delay(500);
-
-  tellWifi("AT+CIPSERVER=1,66\r\n");
-  HAL_Delay(500);
-
+ // wifiInit();
+	tellWifi("AT+CWMODE=2\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPMUX=1\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPSERVER=1,66\r\n");
+	HAL_Delay(500);
   sendMsg("[STM] Wifi Ready\r\n");
   HAL_Delay(500);
-  TIM4->CCR3=0;
+  sendMsg("[STM] Wait for APP. (Please connect to AP:Projector, IP:192.168.4.1, Port:66)");
 
 
 
@@ -470,27 +473,34 @@ int main(void)
   }
 
   //move upward and send 'N' after moving until TOP (send 'T')
-  sendMsgThrWifi("N");
+  HAL_Delay(500);
+  sendMsgThrWifi("N\n");
 
   HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
   pwmMode='I';
+  sendMsg("[STM] Start Cruising\r\n");
   while(focusState!='T'){
 	  a4988MoveDone=0;
 	  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
 	  while(a4988MoveDone==0){
 		  HAL_Delay(10);
 	  }
-	  sendMsg("[STM] Move Upward Done\r\n");
-	  sendMsgThrWifi("N");
-	  HAL_Delay(300);
+	  sendMsg("[STM] > Upward Done\r\n");
+	  if(focusState!='T'){
+		  sendMsgThrWifi("N\n");
+	  }
+	  HAL_Delay(500);
   }
   sendMsg("[STM] Cruise Done\r\n");
-  sendMsgThrWifi("T");
+  sendMsgThrWifi("T\n");
 
   //TODO move downward base on recvNum
   while(state!='R'){
 	  HAL_Delay(10);
   }
+  char tosend[50]={0};
+  sprintf(tosend,"[STM] Start moving %d step downward\r\n",recvNum);
+  sendMsg(tosend);
   HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
   for(int i=0;i<recvNum;i++){
 	  a4988MoveDone=0;
@@ -498,10 +508,10 @@ int main(void)
 	  while(a4988MoveDone==0){
 		  HAL_Delay(10);
 	  }
-	  HAL_Delay(100);
   }
   state=0;
-  sendMsgThrWifi("K");
+  sprintf(tosend,"[STM] Moving %d step downward Done\r\n",recvNum);
+  sendMsgThrWifi("K\n");
 
 
   //TODO Fine tune
@@ -512,39 +522,60 @@ int main(void)
 	  }
 	  switch(state){
 	  case 'U':
-		  sendMsg("[STM] Upward\r\n");
+
 		  state=0;
 		  a4988MoveDone=0;
 		  pwmMode='I';
 		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
 		  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
-		  while(a4988MoveDone==0);
-		  sendMsgThrWifi("K");
+		  while(a4988MoveDone==0){
+			  HAL_Delay(10);
+		  }
+		  sendMsg("[STM] FineTune- Upward Done\r\n");
+		  HAL_Delay(500);
+		  sendMsgThrWifi("K\n");
 		  break;
 	  case 'D':
-		  sendMsg("[STM] Downward\r\n");
+
 		  state=0;
 		  a4988MoveDone=0;
 		  pwmMode='I';
 		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
 		  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
-		  while(a4988MoveDone==0);
-		  sendMsgThrWifi("K");
+		  while(a4988MoveDone==0){
+			  HAL_Delay(10);
+		  }
+		  sendMsg("[STM] FineTune- Downward Done\r\n");
+		  HAL_Delay(500);
+		  sendMsgThrWifi("K\n");
 		  break;
 	  //TODO top bottom finish
 	  case 'T':
-		  sendMsg("[STM] Top\r\n");
+
 		  state=0;
 		  pwmMode='N';
+		  a4988MoveDone=0;
 		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
 		  HAL_TIM_PWM_Start(&htim5,TIM_CHANNEL_2);
+		  while(a4988MoveDone==0){
+			  HAL_Delay(10);
+		  }
+		  sendMsg("[STM] FineTune- Top Done\r\n");
+		  sendMsgThrWifi("K\n");
 		  break;
 	  case 'B':
-		  sendMsg("[STM] Bottom\r\n");
+
 		  state=0;
 		  pwmMode='N';
+		  a4988MoveDone=0;
 		  HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,0);
 		  HAL_TIM_PWM_Start(&htim5,TIM_CHANNEL_2);
+		  while(a4988MoveDone==0){
+			  HAL_Delay(10);
+		  }
+		  sendMsg("[STM] FineTune- Bottom Done\r\n");
+		  sendMsgThrWifi("K\n");
+
 		  break;
 	  case 'F':
 		  sendMsg("[STM] Auto Focus Fine Tune Finish\r\n");
