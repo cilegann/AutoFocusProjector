@@ -420,16 +420,18 @@ int main(void)
   sendMsg("[STM] Initializing Wifi...\r\n");
   HAL_Delay(500);
 
- // wifiInit();
-	tellWifi("AT+CWMODE=2\r\n");
-	HAL_Delay(500);
-	tellWifi("AT+CIPMUX=1\r\n");
-	HAL_Delay(500);
-	tellWifi("AT+CIPSERVER=1,66\r\n");
-	HAL_Delay(500);
+  wifiInit();
+
+  tellWifi("AT+CWMODE=2\r\n");
+  HAL_Delay(500);
+  tellWifi("AT+CIPMUX=1\r\n");
+  HAL_Delay(500);
+  tellWifi("AT+CIPSERVER=1,66\r\n");
+  HAL_Delay(500);
   sendMsg("[STM] Wifi Ready\r\n");
   HAL_Delay(500);
-  sendMsg("[STM] Wait for APP. (Please connect to AP:Projector, IP:192.168.4.1, Port:66)");
+
+  sendMsg("[STM] Wait for APP. (Please connect to AP:Projector)");
 
 
 
@@ -479,25 +481,31 @@ int main(void)
   HAL_GPIO_WritePin(A4988_DIR_GRP,A4988_DIR_PIN,1);
   pwmMode='I';
   sendMsg("[STM] Start Cruising\r\n");
-  while(focusState!='T'){
+
+  while(1){
+	  while(state!='U' && state!='R'){
+		  HAL_Delay(10);
+	  }
+	  if(state=='R'){
+		  break;
+	  }
+	  sendMsg("[STM] Moving UPWARD for one step\r\n");
 	  a4988MoveDone=0;
 	  HAL_TIM_PWM_Start_IT(&htim5,TIM_CHANNEL_2);
 	  while(a4988MoveDone==0){
 		  HAL_Delay(10);
 	  }
-	  sendMsg("[STM] > Upward Done\r\n");
+	  sendMsg("[STM] > Done\r\n");
+	  state=0;
+	  HAL_Delay(500);
 	  if(focusState!='T'){
 		  sendMsgThrWifi("N\n");
+	  }else{
+		  sendMsgThrWifi("T\n");
 	  }
-	  HAL_Delay(500);
   }
-  sendMsg("[STM] Cruise Done\r\n");
-  sendMsgThrWifi("T\n");
-
   //TODO move downward base on recvNum
-  while(state!='R'){
-	  HAL_Delay(10);
-  }
+
   char tosend[50]={0};
   sprintf(tosend,"[STM] Start moving %d step downward\r\n",recvNum);
   sendMsg(tosend);
@@ -522,7 +530,6 @@ int main(void)
 	  }
 	  switch(state){
 	  case 'U':
-
 		  state=0;
 		  a4988MoveDone=0;
 		  pwmMode='I';
