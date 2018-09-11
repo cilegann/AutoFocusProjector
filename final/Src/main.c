@@ -57,6 +57,7 @@ UART_HandleTypeDef huart6;
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 #define LRCALI_MINVALUE 0.3
+#define LRCALI_MINRANGE 0.025
 #define LRCALI_MAXVALUE 12
 #define LRCALI_PWMWIDTH 1000
 #define LRCALI_ULPERIOD 7000 // xK = x us
@@ -199,7 +200,10 @@ void wifiInit(){
 	HAL_Delay(500);
 	tellWifi("AT+CIPMUX=1\r\n");
 	HAL_Delay(500);
-	tellWifi("AT+CIPSERVER=1\r\n");
+
+	tellWifi("AT+CIPSERVER=1,66\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPSTO=0\r\n");
 	HAL_Delay(500);
 }
 
@@ -212,7 +216,7 @@ int motorMoveDone=0;
 void LRCalibrate(double dl,double dr){
 	  char tosend[50]={0};
 	  if(dl*LRCALI_MAXVALUE>dr && dr*LRCALI_MAXVALUE>dl){
-		  if( (dr-dl)>LRCALI_MINVALUE ||(dl-dr)>LRCALI_MINVALUE ){
+		  if( (dr-dl)>dl*LRCALI_MINRANGE ||(dl-dr)>dr*LRCALI_MINRANGE ){
 			  if(dl>dr){
 				  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn R\r\n",inta,floata,intb,floatb);
 				  sendMsg(tosend);
@@ -420,14 +424,18 @@ int main(void)
   sendMsg("[STM] Initializing Wifi...\r\n");
   HAL_Delay(500);
 
-  wifiInit();
+  //wifiInit();
 
-  tellWifi("AT+CWMODE=2\r\n");
-  HAL_Delay(500);
-  tellWifi("AT+CIPMUX=1\r\n");
-  HAL_Delay(500);
-  tellWifi("AT+CIPSERVER=1,66\r\n");
-  HAL_Delay(500);
+	tellWifi("AT+CWMODE=2\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPMUX=1\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPSTO=0\r\n");
+	HAL_Delay(500);
+	tellWifi("AT+CIPSERVER=1,66\r\n");
+	HAL_Delay(500);
+
+
   sendMsg("[STM] Wifi Ready\r\n");
   HAL_Delay(500);
 
