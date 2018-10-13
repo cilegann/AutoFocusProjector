@@ -56,6 +56,7 @@ UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+#define GET_DISTANCE_TIME 3
 #define L_OFFSET 0
 #define R_OFFSET 0
 #define LRCALI_MINVALUE 0.3
@@ -67,9 +68,9 @@ int AFCALI_PWMWIDTH = 500;
 #define AFCALI_EX_PWMWIDTH 100
 
 #define A4988_PWM_GRP GPIOA
-#define A4988_PWM_PIN GPIO_PIN_2
-#define A4988_DIR_GRP GPIOG
-#define A4988_DIR_PIN GPIO_PIN_12
+#define A4988_PWM_PIN GPIO_PIN_1
+#define A4988_DIR_GRP GPIOA  //GPIOG
+#define A4988_DIR_PIN GPIO_PIN_2  //GPIO_PIN_12
 #define LULT_TRIG_GRP GPIOB
 #define LULT_TRIG_PIN GPIO_PIN_5
 #define LULT_ECHO_GRP GPIOA
@@ -212,13 +213,14 @@ void wifiInit(){
 // Handling LR calibration
 int inta=0,intb=0,floata=0,floatb=0;
 double distancea=0,distanceb=0;
+double distancea_final=0,distanceb_final=0;
 int ultrasonic=0;  // 0 for Ultrasonic1 , 1 for ultrasonic2 , 2 for motor
 int LRCALI_STATE=0;
 int motorMoveDone=0;
 void LRCalibrate(double dl,double dr){
 	  char tosend[50]={0};
 	  if(dl*LRCALI_MAXVALUE>dr && dr*LRCALI_MAXVALUE>dl){
-		  if( (dr-dl)>dl*LRCALI_MINRANGE ||(dl-dr)>dr*LRCALI_MINRANGE ){
+		  if( (dr-dl)>LRCALI_MINVALUE ||(dl-dr)>LRCALI_MINVALUE ){
 			  if(dl>dr){
 				  sprintf(tosend,"> %d.%02d , %d.%02d -> Turn R\r\n",inta,floata,intb,floatb);
 				  sendMsg(tosend);
@@ -257,9 +259,9 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			__HAL_TIM_SET_COUNTER(&htim2,0);
 		}else{
 			int cnt=__HAL_TIM_GET_COUNTER(&htim2);
-			distancea=cnt/(double)58;
+			distancea=(cnt/(double)58);
 			distancea+=L_OFFSET;
-      inta=(int)distancea;
+			inta=(int)distancea;
 			floata=(int)((distancea-inta)*100);
 			ultrasonic=1;
 		}
@@ -269,8 +271,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			__HAL_TIM_SET_COUNTER(&htim3,0);
 		}else{
 			int cnt=__HAL_TIM_GET_COUNTER(&htim3);
-			distanceb=cnt/(double)58;
-      distanceb+=R_OFFSET;
+			distanceb=(cnt/(double)58);
+			distanceb+=R_OFFSET;
 			intb=(int)distanceb;
 			floatb=(int)((distanceb-intb)*100);
 			ultrasonic=2;
@@ -402,7 +404,7 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInitre */
+  /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
 
@@ -459,15 +461,32 @@ int main(void)
   HAL_Delay(500);
 
   while(LRCALI_STATE != 1){
-	  HAL_TIM_Base_Start_IT(&htim1);
-	  while(ultrasonic!=1){
-		  HAL_Delay(100);
+	  distancea_final=0;
+	  distanceb_final=0;
+	  for(int i=0;i<GET_DISTANCE_TIME;i++){
+		  char tosend[50]={0};
+		  sprintf(tosend,"[ULT] Getting distance... Trial %d\r\n",i);
+		  sendMsg(tosend);
+		  HAL_TIM_Base_Start_IT(&htim1);
+		  while(ultrasonic!=1){
+			  HAL_Delay(100);
+		  }
+		  HAL_TIM_Base_Start_IT(&htim1);
+		  while(ultrasonic!=2){
+			  HAL_Delay(100);
+		  }
+		  ultrasonic=0;
+		  if(distancea*LRCALI_MAXVALUE>distanceb && distanceb*LRCALI_MAXVALUE>distancea){
+			  distancea_final+=distancea;
+			  distanceb_final+=distanceb;
+		  }else{
+			  i--;
+		  }
 	  }
-	  HAL_TIM_Base_Start_IT(&htim1);
-	  while(ultrasonic!=2){
-		  HAL_Delay(100);
-	  }
-	  LRCalibrate(distancea,distanceb);
+	  ultrasonic=2;
+	  distancea_final/=GET_DISTANCE_TIME;
+	  distanceb_final/=GET_DISTANCE_TIME;
+	  LRCalibrate(distancea_final,distanceb_final);
 	  while(!motorMoveDone){
 		  HAL_Delay(100);
 	  }
@@ -911,10 +930,10 @@ static void MX_GPIO_Init(void)
                           |GPIO_PIN_14, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PB5 PB9 PB13 PB12 
                            PB14 */
@@ -931,13 +950,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PG12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_12;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
@@ -950,6 +962,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA2 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
