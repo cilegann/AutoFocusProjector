@@ -56,12 +56,13 @@ UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-#define GET_DISTANCE_TIME 3
+#define GET_DISTANCE_TIME 4
 #define L_OFFSET 0
 #define R_OFFSET 0
-#define LRCALI_MINVALUE 0.3
+#define LRCALI_MINVALUE 0.2
 #define LRCALI_MINRANGE 0.025
 #define LRCALI_MAXVALUE 12
+#define LRCALI_MAX_DIFFERENCE_VALUE 1.5
 #define LRCALI_PWMWIDTH 1000
 #define LRCALI_ULPERIOD 7000 // xK = x us
 int AFCALI_PWMWIDTH = 500;
@@ -219,6 +220,10 @@ int LRCALI_STATE=0;
 int motorMoveDone=0;
 void LRCalibrate(double dl,double dr){
 	  char tosend[50]={0};
+	  inta=(int)dl;
+	  floata=(int)((dl-inta)*100);
+	  intb=(int)dr;
+	  floatb=(int)((dr-intb)*100);
 	  if(dl*LRCALI_MAXVALUE>dr && dr*LRCALI_MAXVALUE>dl){
 		  if( (dr-dl)>LRCALI_MINVALUE ||(dl-dr)>LRCALI_MINVALUE ){
 			  if(dl>dr){
@@ -241,8 +246,8 @@ void LRCalibrate(double dl,double dr){
 		  }else{
 			  sprintf(tosend,"> %d.%02d , %d.%02d -> DONE\r\n",inta,floata,intb,floatb);
 			  sendMsg(tosend);
-			  LRCALI_STATE=1;
-			  return;
+			  LRCALI_STATE++;
+			  //return;
 		  }
 	  }else{
 		  sprintf(tosend,"> %d.%02d , %d.%02d -> X\r\n",inta,floata,intb,floatb);
@@ -261,8 +266,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			int cnt=__HAL_TIM_GET_COUNTER(&htim2);
 			distancea=(cnt/(double)58);
 			distancea+=L_OFFSET;
-			inta=(int)distancea;
-			floata=(int)((distancea-inta)*100);
 			ultrasonic=1;
 		}
 	}
@@ -273,8 +276,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 			int cnt=__HAL_TIM_GET_COUNTER(&htim3);
 			distanceb=(cnt/(double)58);
 			distanceb+=R_OFFSET;
-			intb=(int)distanceb;
-			floatb=(int)((distanceb-intb)*100);
 			ultrasonic=2;
 		}
 	}
@@ -459,14 +460,13 @@ int main(void)
 
   sendMsg("[STM] LR-Calibration START\r\n");
   HAL_Delay(500);
-
-  while(LRCALI_STATE != 1){
+  int LR_done=0;
+  while(LRCALI_STATE != 2){
 	  distancea_final=0;
 	  distanceb_final=0;
 	  for(int i=0;i<GET_DISTANCE_TIME;i++){
 		  char tosend[50]={0};
-		  sprintf(tosend,"[ULT] Getting distance... Trial %d\r\n",i);
-		  sendMsg(tosend);
+
 		  HAL_TIM_Base_Start_IT(&htim1);
 		  while(ultrasonic!=1){
 			  HAL_Delay(100);
@@ -476,20 +476,30 @@ int main(void)
 			  HAL_Delay(100);
 		  }
 		  ultrasonic=0;
-		  if(distancea*LRCALI_MAXVALUE>distanceb && distanceb*LRCALI_MAXVALUE>distancea){
+		  inta=(int)distancea;
+		  floata=(int)((distancea-inta)*100);
+		  intb=(int)distanceb;
+		  floatb=(int)((distanceb-intb)*100);
+		  if( distancea-distanceb<LRCALI_MAX_DIFFERENCE_VALUE && distanceb-distancea<LRCALI_MAX_DIFFERENCE_VALUE ){
+			  sprintf(tosend,"[ULT] Getting distance... %d.%02d,%d.%02d -> Write\r\n",inta,floata,intb,floatb);
+			  sendMsg(tosend);
 			  distancea_final+=distancea;
 			  distanceb_final+=distanceb;
 		  }else{
+			  sprintf(tosend,"[ULT] Getting distance... %d.%02d,%d.%02d -> Pass\r\n",inta,floata,intb,floatb);
+			  sendMsg(tosend);
 			  i--;
 		  }
 	  }
 	  ultrasonic=2;
 	  distancea_final/=GET_DISTANCE_TIME;
 	  distanceb_final/=GET_DISTANCE_TIME;
+	  distancea_final+=0.05;
 	  LRCalibrate(distancea_final,distanceb_final);
 	  while(!motorMoveDone){
 		  HAL_Delay(100);
 	  }
+
   }
 
   HAL_Delay(1000);
