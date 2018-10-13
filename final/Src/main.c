@@ -56,6 +56,8 @@ UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+#define L_OFFSET 0
+#define R_OFFSET 0
 #define LRCALI_MINVALUE 0.3
 #define LRCALI_MINRANGE 0.025
 #define LRCALI_MAXVALUE 12
@@ -256,7 +258,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 		}else{
 			int cnt=__HAL_TIM_GET_COUNTER(&htim2);
 			distancea=cnt/(double)58;
-			inta=(int)distancea;
+			distancea+=L_OFFSET;
+      inta=(int)distancea;
 			floata=(int)((distancea-inta)*100);
 			ultrasonic=1;
 		}
@@ -267,6 +270,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 		}else{
 			int cnt=__HAL_TIM_GET_COUNTER(&htim3);
 			distanceb=cnt/(double)58;
+      distanceb+=R_OFFSET;
 			intb=(int)distanceb;
 			floatb=(int)((distanceb-intb)*100);
 			ultrasonic=2;
